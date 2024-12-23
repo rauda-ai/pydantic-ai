@@ -191,6 +191,7 @@ class Agent(Generic[AgentDeps, ResultData]):
         model_settings: ModelSettings | None = None,
         usage_limits: UsageLimits | None = None,
         infer_name: bool = True,
+        generate_system_prompt: bool = True,
     ) -> result.RunResult[ResultData]:
         """Run the agent with a user prompt in async mode.
 
@@ -233,7 +234,7 @@ class Agent(Generic[AgentDeps, ResultData]):
             agent_name=self.name or 'agent',
         ) as run_span:
             run_context = RunContext(deps, 0, [], None, model_used)
-            messages = await self._prepare_messages(user_prompt, message_history, run_context)
+            messages = await self._prepare_messages(user_prompt, message_history, run_context, generate_system_prompt)
             self.last_run_messages = run_context.messages = messages
 
             for tool in self._function_tools.values():
@@ -833,16 +834,19 @@ class Agent(Generic[AgentDeps, ResultData]):
         )
 
     async def _prepare_messages(
-        self, user_prompt: str, message_history: list[_messages.ModelMessage] | None, run_context: RunContext[AgentDeps]
+        self, 
+        user_prompt: str, 
+        message_history: list[_messages.ModelMessage] | None, 
+        run_context: RunContext[AgentDeps], 
+        generate_system_prompt: bool = True
     ) -> list[_messages.ModelMessage]:
-        if message_history:
-            # shallow copy messages
-            messages = message_history.copy()
-            messages.append(_messages.ModelRequest([_messages.UserPromptPart(user_prompt)]))
-        else:
+        if generate_system_prompt or not message_history:
             parts = await self._sys_parts(run_context)
             parts.append(_messages.UserPromptPart(user_prompt))
             messages: list[_messages.ModelMessage] = [_messages.ModelRequest(parts)]
+        else:
+            messages = message_history.copy()
+            messages.append(_messages.ModelRequest([_messages.UserPromptPart(user_prompt)]))
 
         return messages
 
